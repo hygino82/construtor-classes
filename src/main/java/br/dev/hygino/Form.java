@@ -212,9 +212,44 @@ public class Form {
 
             // Conteúdo da interface
             StringBuilder sb = new StringBuilder("package " + basePackage + ".repositories;\n");
-            sb.append("\nimport " + basePackage + "entities." + entity + ";\n");
+            sb.append("\nimport " + basePackage + ".entities." + entity + ";\n");
             sb.append("import org.springframework.data.jpa.repository.JpaRepository;\n");
             sb.append("public interface " + entity + "Repository extends JpaRepository<" + entity + ",Long>{\n");
+            sb.append("}\n");
+
+            // Escrita no arquivo
+            try (FileWriter writer = new FileWriter(arquivo)) {
+                writer.write(sb.toString());
+            } catch (IOException e) {
+                e.printStackTrace(); // ou exiba em JOptionPane, se desejar
+            }
+        });
+    }
+
+    private void generateServices() {
+
+        listaClasses.forEach(entity -> {
+            // Caminho do arquivo .java
+            File arquivo = new File(rootPackageDirectory + "/services/" + entity + "Service.java");
+
+            // Garante que o diretório "services" exista
+            File pastaServices = arquivo.getParentFile();
+            if (!pastaServices.exists()) {
+                pastaServices.mkdirs(); // Cria os diretórios se não existirem
+            }
+
+            // Conteúdo da interface
+            StringBuilder sb = new StringBuilder("package " + basePackage + ".repositories;\n");
+            sb.append("\nimport " + basePackage + ".repositories." + entity + "Repository;\n");
+
+            sb.append("import org.springframework.stereotype.Service;\n");
+            sb.append("import org.springframework.transaction.annotation.Transactional;\n\n");
+            sb.append("@Service\n");
+            sb.append("public class " + entity + "Service{\n");
+            final String repository = entity + "Repository";
+            sb.append("private final " + repository + " repository;\n");
+            sb.append("public " + entity + "Service(" + repository + " repository){\n");
+            sb.append("this.repository = repository;\n}\n");
             sb.append("}\n");
 
             // Escrita no arquivo
@@ -230,6 +265,7 @@ public class Form {
         if (!listaClasses.isEmpty()) {
             generateEntities();// .forEach(txtResultado::append);
             generateRepositories();
+            generateServices();
         }
     }
 }
