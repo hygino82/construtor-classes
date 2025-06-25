@@ -5,8 +5,10 @@ import javax.swing.filechooser.FileNameExtensionFilter;
 import java.awt.*;
 import java.awt.event.ActionEvent;
 import java.io.File;
+import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
@@ -15,6 +17,7 @@ public class Form {
 
     private boolean classeValida = false;
     private final Set<String> listaClasses = new HashSet<>();
+    private String basePackage, rootPackageDirectory;
 
     private JFrame janela;
     private JLabel lbCaminhoArquivo, lbBasePackage;
@@ -69,6 +72,8 @@ public class Form {
         painelTopo.add(linhaBotoes);
 
         btnBuscarArquivo.addActionListener(this::buscarArquivo);
+        btnAdicionaEntidade.addActionListener(this::addEntityClass);
+        btnGeraClasses.addActionListener(this::generateCrudClasses);
 
         return painelTopo;
     }
@@ -97,12 +102,15 @@ public class Form {
     private void processarArquivo(File arquivo) {
         lbCaminhoArquivo.setText("Arquivo selecionado: " + arquivo.getAbsolutePath());
 
+        rootPackageDirectory = arquivo.getParent();
+        txtResultado.append('\n' + rootPackageDirectory);
+
         try {
             List<String> linhas = Files.readAllLines(arquivo.toPath());
 
             boolean temMain = linhas.stream().anyMatch(l -> l.contains("public static void main"));
             boolean temSpring = linhas.stream().anyMatch(l -> l.contains("@SpringBootApplication"));
-            String basePackage = linhas.stream()
+            basePackage = linhas.stream()
                     .filter(l -> l.startsWith("package"))
                     .findFirst()
                     .map(l -> l.replace("package", "").replace(";", "").trim())
@@ -124,8 +132,104 @@ public class Form {
             txtResultado.append(resultado.toString());
 
         } catch (IOException ex) {
-            JOptionPane.showMessageDialog(janela, "Erro ao ler o arquivo: " + ex.getMessage(), "Erro", JOptionPane.ERROR_MESSAGE);
+            JOptionPane.showMessageDialog(janela, "Erro ao ler o arquivo: " + ex.getMessage(), "Erro",
+                    JOptionPane.ERROR_MESSAGE);
         }
     }
 
+    private void addEntityClass(ActionEvent event) {
+        String className = txtNomeClasse.getText().trim();
+
+        if (isNotEmptyAndStartsWithLetter(className)) {
+            listaClasses.add(className);
+            txtResultado.append("Entidade adicionada: " + className + '\n');
+        } else {
+            JOptionPane.showMessageDialog(null, "Ocorreu um erro!", "Entidade Inválida", JOptionPane.ERROR_MESSAGE);
+        }
+
+        txtNomeClasse.setText("");
+        txtNomeClasse.requestFocus();
+    }
+
+    private boolean isNotEmptyAndStartsWithLetter(String str) {
+        return str != null && !str.isEmpty() && Character.isLetter(str.charAt(0));
+    }
+
+    private void generateEntities() {
+
+        listaClasses.forEach(entity -> {
+            // Caminho do arquivo .java
+            File arquivo = new File(rootPackageDirectory + "/entities/" + entity + ".java");
+
+            // Garante que o diretório "entities" exista
+            File pastaEntities = arquivo.getParentFile();
+            if (!pastaEntities.exists()) {
+                pastaEntities.mkdirs(); // Cria os diretórios se não existirem
+            }
+
+            // Conteúdo da classe
+            StringBuilder sb = new StringBuilder("package " + basePackage + ".entities;\n\n");
+            sb.append("""
+                    import jakarta.persistence.Column;
+                    import jakarta.persistence.Entity;
+                    import jakarta.persistence.GeneratedValue;
+                    import jakarta.persistence.GenerationType;
+                    import jakarta.persistence.Id;
+                    import jakarta.persistence.Table;
+
+                    """);
+            sb.append("@Entity\n@Table\n");
+            sb.append("public class ").append(entity).append(" {\n\n");
+            sb.append("""
+                    @Id
+                    @GeneratedValue(strategy = GenerationType.IDENTITY)
+                    @Column(nullable = false)
+                    private Long id;
+
+                    """);
+            sb.append("}\n");
+
+            // Escrita no arquivo
+            try (FileWriter writer = new FileWriter(arquivo)) {
+                writer.write(sb.toString());
+            } catch (IOException e) {
+                e.printStackTrace(); // ou exiba em JOptionPane, se desejar
+            }
+        });
+    }
+
+    private void generateRepositories() {
+
+        listaClasses.forEach(entity -> {
+            // Caminho do arquivo .java
+            File arquivo = new File(rootPackageDirectory + "/repositories/" + entity + "Repository.java");
+
+            // Garante que o diretório "repositories" exista
+            File pastaRepositories = arquivo.getParentFile();
+            if (!pastaRepositories.exists()) {
+                pastaRepositories.mkdirs(); // Cria os diretórios se não existirem
+            }
+
+            // Conteúdo da interface
+            StringBuilder sb = new StringBuilder("package " + basePackage + ".repositories;\n");
+            sb.append("\nimport " + basePackage + "entities." + entity + ";\n");
+            sb.append("import org.springframework.data.jpa.repository.JpaRepository;\n");
+            sb.append("public interface " + entity + "Repository extends JpaRepository<" + entity + ",Long>{\n");
+            sb.append("}\n");
+
+            // Escrita no arquivo
+            try (FileWriter writer = new FileWriter(arquivo)) {
+                writer.write(sb.toString());
+            } catch (IOException e) {
+                e.printStackTrace(); // ou exiba em JOptionPane, se desejar
+            }
+        });
+    }
+
+    private void generateCrudClasses(ActionEvent event) {
+        if (!listaClasses.isEmpty()) {
+            generateEntities();// .forEach(txtResultado::append);
+            generateRepositories();
+        }
+    }
 }
